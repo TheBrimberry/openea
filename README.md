@@ -1,6 +1,6 @@
-# FxChartAI Algorithm Trading EA
+# FxChartAI AI-Agent Trading EA
 
-FxChartAI Algorithm Trading EA is an open-source Expert Advisor (EA) for MetaTrader 5, designed for algorithmic trading using signals received from FxChartAI. The EA processes market signals from FxChartAI and implements a structured trading checklist for making trading decisions. It now integrates live signal data via API calls (with fallback CSV test mode) and includes advanced trend confirmation, candle tail/trendline analysis, dynamic order management, and robust error handling. This project is free to use for both personal and commercial purposes, and we encourage contributions to help improve the algorithm toward achieving 100% accurate trade decisions.
+FxChartAI AI-Agent Trading EA is an open-source Expert Advisor (EA) for MetaTrader 5, designed for agentic trading using signals received from FxChartAI. The EA processes market signals from FxChartAI and implements a structured trading checklist for making trading decisions. It now integrates live signal data via API calls (with fallback CSV test mode) and includes advanced trend confirmation, candle tail/trendline analysis, dynamic order management, and robust error handling. This project is free to use for both personal and commercial purposes, and we encourage contributions to help improve the agent toward achieving 100% accurate trade decisions.
 
 ![openea-all-positions_jpg](https://github.com/user-attachments/assets/87e55224-ce66-4869-a4f2-e658e7052973)
 
@@ -10,7 +10,7 @@ FxChartAI Algorithm Trading EA is an open-source Expert Advisor (EA) for MetaTra
 - **API & CSV Signal Integration:**  
   - Retrieves live signals from FxChartAI API via GET requests.
   - Fallback support for CSV-based signals in test mode.
-  - Signals include `position` (0 = Buy, 1 = Sell, 2 = None), and `signal` (e.g., weight).
+  - Signals include `position` (0 = Buy, 1 = Sell, 2 = None), and `weight` (0 = High, 1 = Low, 2 = None).
 
 - **Multi-Timeframe Analysis:**  
   - Processes both M10 and H1 data.
@@ -54,10 +54,10 @@ FxChartAI Algorithm Trading EA is an open-source Expert Advisor (EA) for MetaTra
 - **fxchartai_openea.mq5**  
   The main EA source code implementing the trading logic based on FxChartAI signals.
 
-- **datasets/Feb_2025/signal_dataset_gbpusd_m10.csv**  
+- **datasets/feb_2025/signal_dataset_gbpusd_m10.csv**  
   February 2025 CSV dataset for GBP/USD FxChartAI signals on the M10 timeframe.
 
-- **datasets/Feb_2025/signal_dataset_gbpusd_h1.csv**  
+- **datasets/feb_2025/signal_dataset_gbpusd_h1.csv**  
   February 2025 CSV dataset for GBP/USD FxChartAI signals on the H1 timeframe.
 
 - **include/JAson.mqh**  
@@ -80,8 +80,8 @@ These steps do not require editing code and are for setting up your environment 
 3. **File Placement:**
    - Open MetaTrader 5 → File → Open Data Folder.
    - Place `fxchartai_openea.ex5` in your MetaTrader 5 `Experts` folder.  
-     *(Typically located at: `MQL5/Experts` in your MetaTrader data directory.)*
-   - Place the `datasets` folder (with test CSV files) in the data directory (usually located at `Tester/.../MQL5/Files`) as required (this is used only if running in test mode).
+     *(Typically located at: `MQL5\Experts` in your MetaTrader data directory.)*
+   - Place the `datasets` folder (with test CSV files) in the data directory (usually located at `MetaQuotes\Tester\...\...\MQL5\Files`) as required (this is used only if running in test mode).
 
 4. **Include Dependencies:**
    - Ensure that the JAson.mqh file (downloaded per [JAson.mqh article](https://www.mql5.com/en/articles/14108)) is placed in your `MQL5\Include` folder.
@@ -97,8 +97,8 @@ For users familiar with MetaEditor or who wish to compile and customize the EA c
 
 3. **File Placement:**
    - Place `fxchartai_openea.mq5` in your MetaTrader 5 `Experts` folder.  
-     *(Typically located at: `MQL5/Experts` in your MetaTrader data directory.)*
-   - Place the `datasets` folder (with sample CSV files) in the data directory (usually located at `Tester/.../MQL5/Files`) as required (this is used only if running in test mode).
+     *(Typically located at: `MQL5\Experts` in your MetaTrader data directory.)*
+   - Place CSV files in the `datasets` folder in the data directory (usually located at `MetaQuotes\Tester\...\...\MQL5\Files`) as required (this is used only if running in test mode).
 
 4. **Include Dependencies:**
    - Ensure that the JAson.mqh file (downloaded per [JAson.mqh article](https://www.mql5.com/en/articles/14108)) is placed in your `MQL5\Include` folder.
@@ -126,7 +126,7 @@ For users familiar with MetaEditor or who wish to compile and customize the EA c
    - Open the Strategy Tester in MetaTrader 5.
    - Select the FxChartAI_OpenEA EA from the Experts dropdown.
    - Set the mode parameter to 0 (test mode is recommended) to use CSV-based signals or 1 to pull signal data using API.
-   - Ensure the CSV files (test mode) are available in the correct `MQL5/Files` directory. The directory is usually clean up by Strategy Tester when the EA is updated.
+   - Ensure the CSV files (test mode) are available in the correct `MetaQuotes\Tester\...\...\MQL5\Files` directory. The directory is usually clean up by Strategy Tester when the EA is updated.
    - Configure your testing parameters (date range, initial deposit, etc.).
    - Click "Start" to run the EA in the Strategy Tester.
 
@@ -142,7 +142,7 @@ For users familiar with MetaEditor or who wish to compile and customize the EA c
 
 ## Contributing
 
-We welcome contributions from the community to improve the FxChartAI Algorithm Trading EA. If you have ideas or improvements that can help the algorithm reach 100% accurate trade decisions, please:
+We welcome contributions from the community to improve the FxChartAI AI-Agent Trading EA. If you have ideas or improvements that can help the agent get closer to 100% accurate trade decisions, please:
 
 - Fork this repository.
 - Create a feature branch and implement your changes.
@@ -166,8 +166,11 @@ This project is released under the [MIT License](LICENSE). It is free to use for
   [Read the article](https://abiodunaremung.medium.com/lessons-learned-from-fine-tuning-a-transformer-model-on-forex-data-d1d25e98bba0)
 - **FxChartAI ABT: The Final Piece on AI-Driven Forex Analysis Journey**  
   [Read the article](https://abiodunaremung.medium.com/fxchartai-abt-the-final-piece-on-ai-driven-forex-analysis-journey-848466aca457)
+- **The Future of Financial Trading: Beyond Quant and Algo Trading to AI Agent Trading**  
+  [Read the article](https://abiodunaremung.medium.com/the-future-of-financial-trading-beyond-quant-and-algo-trading-to-ai-agent-trading-04f781fe19ba)
+
 
 ## Final Notes
 
-This EA provides a robust starting point for algorithmic trading based on FxChartAI signals. The project structure is designed to encourage community contributions and improvements. Enjoy trading and happy coding!
+This EA provides a robust starting point for AI-Agent trading based on FxChartAI signals. The project structure is designed to encourage community contributions and improvements. Enjoy trading and happy coding!
 
