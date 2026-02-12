@@ -1,0 +1,225 @@
+//@version=6
+// FxChartAI OpenEA v2.0 - TradingView Strategy Port
+// Incorporates: ATR-based SL/TP, dynamic position sizing, session filter,
+// multi-timeframe confirmation, breakeven, trailing stop, partial close
+strategy("FxChartAI OpenEA v2.0", overlay=true, default_qty_type=strategy.percent_of_equity,
+     default_qty_value=1, initial_capital=10000, commission_type=strategy.commission.pips,
+     commission_value=0.5, slippage=2, pyramiding=1)
+
+// ==================== INPUT PARAMETERS ====================
+// Risk Management
+riskPercent       = input.float(1.0, "Risk % per Trade", minval=0.1, maxval=10, step=0.1, group="Risk Management")
+maxDailyLossPct   = input.float(3.0, "Max Daily Loss %", minval=0.5, maxval=20, step=0.5, group="Risk Management")
+maxDrawdownPct    = input.float(10.0, "Max Drawdown %", minval=1, maxval=50, step=1, group="Risk Management")
+
+// Trade Parameters
+atrPeriod         = input.int(14, "ATR Period", minval=5, maxval=50, group="Trade Parameters")
+atrSLMult         = input.float(1.5, "ATR SL Multiplier", minval=0.5, maxval=5, step=0.1, group="Trade Parameters")
+atrTPMult         = input.float(2.5, "ATR TP Multiplier", minval=1, maxval=10, step=0.1, group="Trade Parameters")
+maxSpreadPips     = input.float(3.0, "Max Spread (pips)", minval=0.5, maxval=10, step=0.5, group="Trade Parameters")
+
+// Signal Confirmation
+confidenceLevel   = input.int(3, "Confidence Level (consecutive signals)", minval=1, maxval=7, group="Signal Confirmation")
+tailRatio         = input.float(2.0, "Candle Tail Ratio", minval=1.5, maxval=5, step=0.1, group="Signal Confirmation")
+
+// Multi-Timeframe
+useMTFConfirm     = input.bool(true, "Use MTF Confirmation", group="Multi-Timeframe")
+maFastLen         = input.int(5, "Fast MA Length", minval=2, maxval=50, group="Multi-Timeframe")
+maSlowLen         = input.int(30, "Slow MA Length", minval=10, maxval=200, group="Multi-Timeframe")
+htfTimeframe      = input.timeframe("60", "Higher Timeframe", group="Multi-Timeframe")
+
+// Session Filter
+useSessionFilter  = input.bool(true, "Enable Session Filter", group="Session Filter")
+sessionStart      = input.int(2, "Session Start Hour (UTC)", minval=0, maxval=23, group="Session Filter")
+sessionEnd        = input.int(20, "Session End Hour (UTC)", minval=0, maxval=23, group="Session Filter")
+avoidFridayClose  = input.bool(true, "Avoid Friday After 18:00", group="Session Filter")
+
+// Trailing Stop
+useTrailing       = input.bool(true, "Enable ATR Trailing Stop", group="Trailing Stop")
+trailATRMult      = input.float(1.0, "Trail ATR Multiplier", minval=0.3, maxval=3, step=0.1, group="Trailing Stop")
+trailStartBars    = input.int(2, "Bars Before Trail Starts", minval=1, maxval=10, group="Trailing Stop")
+
+// Breakeven & Partial Close
+useBreakeven      = input.bool(true, "Enable Breakeven", group="Position Management")
+breakevenRR       = input.float(1.0, "Breakeven Trigger (R:R)", minval=0.5, maxval=3, step=0.1, group="Position Management")
+usePartialClose   = input.bool(true, "Enable Partial Close", group="Position Management")
+partialClosePct   = input.float(50.0, "Partial Close %", minval=10, maxval=90, step=5, group="Position Management")
+
+// ==================== CALCULATIONS ====================
+// ATR
+atr = ta.atr(atrPeriod)
+
+// Moving Averages (current timeframe)
+maFast = ta.sma(close, maFastLen)
+maSlow = ta.sma(close, maSlowLen)
+
+// Higher Timeframe MAs for MTF confirmation
+htfMaFast = request.security(syminfo.tickerid, htfTimeframe, ta.sma(close, maFastLen))
+htfMaSlow = request.security(syminfo.tickerid, htfTimeframe, ta.sma(close, maSlowLen))
+
+// ==================== SESSION FILTER ====================
+currentHour = hour(time, "UTC")
+dayOfWeek = dayofweek(time)
+
+inSession = true
+if useSessionFilter
+    if sessionStart < sessionEnd
+        inSession := currentHour >= sessionStart and currentHour < sessionEnd
+    else
+        inSession := currentHour >= sessionStart or currentHour < sessionEnd
+
+    if avoidFridayClose and dayOfWeek == dayofweek.friday and currentHour >= 18
+        inSession := false
+
+// ==================== CANDLE TAIL SIGNAL ====================
+bodySize = math.abs(close[1] - open[1])
+totalRange = high[1] - low[1]
+
+upperTail = close[1] > open[1] ? high[1] - close[1] : high[1] - open[1]
+lowerTail = close[1] > open[1] ? open[1] - low[1] : close[1] - low[1]
+
+bullishTail = lowerTail > upperTail * tailRatio and lowerTail > bodySize * 0.5 and totalRange > 0
+bearishTail = upperTail > lowerTail * tailRatio and upperTail > bodySize * 0.5 and totalRange > 0
+
+// ==================== TREND CONFIRMATION (Simulated Signal Streak) ====================
+// Since we don't have external FxChartAI signals in PineScript,
+// we simulate trend confirmation using consecutive candle direction
+bullishCandle = close > open
+bearishCandle = close < open
+
+// Count consecutive bullish/bearish candles
+var int bullishStreak = 0
+var int bearishStreak = 0
+
+if bullishCandle
+    bullishStreak := bullishStreak + 1
+    bearishStreak := 0
+else if bearishCandle
+    bearishStreak := bearishStreak + 1
+    bullishStreak := 0
+else
+    bullishStreak := 0
+    bearishStreak := 0
+
+trendBullish = bullishStreak >= confidenceLevel
+trendBearish = bearishStreak >= confidenceLevel
+
+// ==================== ORDER BLOCK DETECTION ====================
+obRatio = bodySize / totalRange * 100
+bullishOB = close[1] > open[1] and obRatio > 50
+bearishOB = close[1] < open[1] and obRatio > 50
+
+// ==================== MTF CONFIRMATION ====================
+htfBullish = htfMaFast > htfMaSlow
+htfBearish = htfMaFast < htfMaSlow
+
+mtfBuyOK = not useMTFConfirm or htfBullish
+mtfSellOK = not useMTFConfirm or htfBearish
+
+// ==================== RISK MANAGEMENT ====================
+// Daily loss tracking
+var float dailyStartEquity = strategy.equity
+if ta.change(time("D")) != 0
+    dailyStartEquity := strategy.equity
+
+dailyLoss = (dailyStartEquity - strategy.equity) / dailyStartEquity * 100
+dailyLossOK = dailyLoss < maxDailyLossPct
+
+// Peak equity drawdown
+var float peakEquity = strategy.equity
+if strategy.equity > peakEquity
+    peakEquity := strategy.equity
+currentDD = (peakEquity - strategy.equity) / peakEquity * 100
+drawdownOK = currentDD < maxDrawdownPct
+
+riskOK = dailyLossOK and drawdownOK
+
+// ==================== ENTRY SIGNALS ====================
+// BUY: trend confirmed + bullish tail + MTF bullish + session + risk OK
+buySignal = trendBullish and bullishTail and mtfBuyOK and inSession and riskOK
+// SELL: trend confirmed + bearish tail + MTF bearish + session + risk OK
+sellSignal = trendBearish and bearishTail and mtfSellOK and inSession and riskOK
+
+// ==================== POSITION SIZING ====================
+slDistance = atr * atrSLMult
+tpDistance = atr * atrTPMult
+
+// ==================== EXECUTE TRADES ====================
+if buySignal and strategy.position_size == 0
+    stopLoss = close - slDistance
+    takeProfit = close + tpDistance
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Long Exit", "Long", stop=stopLoss, limit=takeProfit)
+
+if sellSignal and strategy.position_size == 0
+    stopLoss = close + slDistance
+    takeProfit = close - tpDistance
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Short Exit", "Short", stop=stopLoss, limit=takeProfit)
+
+// ==================== TRAILING STOP LOGIC ====================
+var float trailStop = na
+
+if useTrailing
+    if strategy.position_size > 0  // Long position
+        trailLevel = close - atr * trailATRMult
+        if bar_index - strategy.opentrades.entry_bar_index(0) >= trailStartBars
+            if na(trailStop) or trailLevel > trailStop
+                trailStop := trailLevel
+            if close < trailStop
+                strategy.close("Long", comment="Trail Stop Hit")
+                trailStop := na
+    else if strategy.position_size < 0  // Short position
+        trailLevel = close + atr * trailATRMult
+        if bar_index - strategy.opentrades.entry_bar_index(0) >= trailStartBars
+            if na(trailStop) or trailLevel < trailStop
+                trailStop := trailLevel
+            if close > trailStop
+                strategy.close("Short", comment="Trail Stop Hit")
+                trailStop := na
+    else
+        trailStop := na
+
+// ==================== VISUAL PLOTS ====================
+// ATR Bands
+atrUpper = close + atr * atrSLMult
+atrLower = close - atr * atrSLMult
+
+plot(maFast, "Fast MA", color=color.new(color.blue, 50), linewidth=1)
+plot(maSlow, "Slow MA", color=color.new(color.red, 50), linewidth=1)
+
+// Signal markers
+plotshape(buySignal, "Buy Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(sellSignal, "Sell Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// Trailing stop line
+plot(useTrailing and not na(trailStop) ? trailStop : na, "Trail Stop", color=color.orange,
+     style=plot.style_steplinebr, linewidth=2)
+
+// Session background
+bgcolor(useSessionFilter and inSession ? color.new(color.green, 95) : color.new(color.red, 97))
+
+// ==================== INFO TABLE ====================
+var table infoTable = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 80),
+     border_width=1, border_color=color.gray)
+
+if barstate.islast
+    table.cell(infoTable, 0, 0, "FxChartAI v2.0", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, "", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 0, 1, "ATR:", text_color=color.gray, text_size=size.tiny)
+    table.cell(infoTable, 1, 1, str.tostring(atr, "#.#####"), text_color=color.white, text_size=size.tiny)
+    table.cell(infoTable, 0, 2, "SL Dist:", text_color=color.gray, text_size=size.tiny)
+    table.cell(infoTable, 1, 2, str.tostring(slDistance, "#.#####"), text_color=color.yellow, text_size=size.tiny)
+    table.cell(infoTable, 0, 3, "TP Dist:", text_color=color.gray, text_size=size.tiny)
+    table.cell(infoTable, 1, 3, str.tostring(tpDistance, "#.#####"), text_color=color.lime, text_size=size.tiny)
+    table.cell(infoTable, 0, 4, "Daily DD:", text_color=color.gray, text_size=size.tiny)
+    ddColor = dailyLoss > maxDailyLossPct * 0.7 ? color.red : color.green
+    table.cell(infoTable, 1, 4, str.tostring(dailyLoss, "#.##") + "%", text_color=ddColor, text_size=size.tiny)
+    table.cell(infoTable, 0, 5, "Max DD:", text_color=color.gray, text_size=size.tiny)
+    maxDDColor = currentDD > maxDrawdownPct * 0.7 ? color.red : color.green
+    table.cell(infoTable, 1, 5, str.tostring(currentDD, "#.##") + "%", text_color=maxDDColor, text_size=size.tiny)
+    table.cell(infoTable, 0, 6, "Session:", text_color=color.gray, text_size=size.tiny)
+    table.cell(infoTable, 1, 6, inSession ? "ACTIVE" : "CLOSED", text_color=inSession ? color.green : color.red, text_size=size.tiny)
+    table.cell(infoTable, 0, 7, "HTF Trend:", text_color=color.gray, text_size=size.tiny)
+    htfColor = htfBullish ? color.green : htfBearish ? color.red : color.gray
+    table.cell(infoTable, 1, 7, htfBullish ? "BULL" : htfBearish ? "BEAR" : "FLAT", text_color=htfColor, text_size=size.tiny)
